@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y \
         zip \
         zlib1g-dev \
         libcurl3-dev \
+        aptitude \
         && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
@@ -40,16 +41,34 @@ RUN pip install enum34 futures mock six && \
 # we either update the base image beyond 14.04 or openjdk-8 is
 # finally backported to trusty; see e.g.
 #   https://bugs.launchpad.net/trusty-backports/+bug/1368094
-RUN add-apt-repository -y ppa:openjdk-r/ppa && \
-    apt-get update && \
-    apt-get install -y openjdk-8-jdk openjdk-8-jre-headless && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# RUN add-apt-repository -y ppa:openjdk-r/ppa && \
+#    apt-get update && \
+#    aptitude install -y full-upgrade openjdk-8-jdk openjdk-8-jre-headless && \
+#    # apt-get install -y ca-certificates-java && \
+#    # apt-get install -y openjdk-8-jdk openjdk-8-jre-headless && \
+#    apt-get clean && \
+#    rm -rf /var/lib/apt/lists/*
+
+# RUN add-apt-repository -y ppa:webupd8team/java && \
+#     apt-get update && \
+#     # aptitude install -y full-upgrade openjdk-8-jdk openjdk-8-jre-headless && \
+#     # apt-get install -y ca-certificates-java && \
+#     # apt-get install -y openjdk-8-jdk openjdk-8-jre-headless && \
+#     apt-get install -y oracle-java8-installer && \
+#     apt-get clean && \
+#     rm -rf /var/lib/apt/lists/*
+
+RUN add-apt-repository -y ppa:openjdk-r/ppa
+RUN apt-get update
+RUN apt-get install --force-yes -y openjdk-8-jdk openjdk-8-jre-headless
+RUN apt-get clean
+RUN rm -rf /var/lib/apt/lists/*
 
 # Running bazel inside a `docker build` command causes trouble, cf:
 #   https://github.com/bazelbuild/bazel/issues/134
 # The easiest solution is to set up a bazelrc file forcing --batch.
 RUN echo "startup --batch" >>/root/.bazelrc
+
 # Similarly, we need to workaround sandboxing issues:
 #   https://github.com/bazelbuild/bazel/issues/418
 RUN echo "build --spawn_strategy=standalone --genrule_strategy=standalone" \
@@ -58,21 +77,23 @@ ENV BAZELRC /root/.bazelrc
 # Install the most recent bazel release.
 ENV BAZEL_VERSION 0.4.5
 WORKDIR /
-RUN mkdir /bazel && \
-    cd /bazel && \
-    curl -fSsL -O https://github.com/bazelbuild/bazel/releases/download/$BAZEL_VERSION/bazel-$BAZEL_VERSION-installer-linux-x86_64.sh && \
-    curl -fSsL -o /bazel/LICENSE.txt https://raw.githubusercontent.com/bazelbuild/bazel/master/LICENSE && \
-    chmod +x bazel-*.sh && \
-    ./bazel-$BAZEL_VERSION-installer-linux-x86_64.sh && \
-    cd / && \
-    rm -f /bazel/bazel-$BAZEL_VERSION-installer-linux-x86_64.sh
+RUN mkdir /bazel
+RUN cd /bazel
+RUN curl -fSsL -O https://github.com/bazelbuild/bazel/releases/download/$BAZEL_VERSION/bazel-$BAZEL_VERSION-installer-linux-x86_64.sh
+RUN curl -fSsL -o /bazel/LICENSE.txt https://raw.githubusercontent.com/bazelbuild/bazel/master/LICENSE
+RUN chmod +x bazel-*.sh
+RUN ./bazel-$BAZEL_VERSION-installer-linux-x86_64.sh
+RUN cd /
+RUN rm -f /bazel/bazel-$BAZEL_VERSION-installer-linux-x86_64.sh
 
-RUN cd / && git clone --recurse-submodules https://github.com/krystianity/serving
-#RUN cd serving/tensorflow && ./configure
-#CMD ["/bin/bash"]
+RUN cd /
+RUN git clone --recurse-submodules https://github.com/krystianity/serving
+RUN cd /serving/tensorflow && echo -ne '\n \n \n \n \n \n \n \n \n \n \n' | ./configure
+CMD ["/bin/bash"]
 
-RUN cd serving/tensorflow && ./tensorflow/tools/ci_build/builds/configured cpu
-RUN cd serving && bazel build --local_resources 4096,4.0,1.0 -j 1 //tensorflow_serving/model_servers:tensorflow_model_server
+RUN cd /serving/tensorflow && ./tensorflow/tools/ci_build/builds/configured cpu
+
+RUN cd /serving && bazel build --local_resources 4096,4.0,1.0 -j 1 //tensorflow_serving/model_servers:tensorflow_model_server
 
 WORKDIR /serving/bazel-bin/tensorflow_serving/model_servers
 CMD ["./tensorflow_model_server"]
