@@ -58,8 +58,8 @@ export_path = "export/main_model/1"
 
 builder = saved_model_builder.SavedModelBuilder(export_path)
 
-print(model.input)
-print(model.output)
+print('Input signature:', model.input)
+print('Output signature:', model.output)
 
 signature = predict_signature_def(inputs={"inputs": model.input},
                                   outputs={"outputs": model.output})
