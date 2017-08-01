@@ -3,6 +3,8 @@ from __future__ import print_function
 import zerorpc
 import msgpack_numpy
 import argparse
+import json
+import logging
 
 from grpc.beta import implementations
 import tensorflow as tf
@@ -44,6 +46,15 @@ class ModelRPC(object):
         self.server_port = 9000
 
     def infer(self, data, shape):
+        def get_output_shape(r):
+            dim = r['outputs']['outputs']['tensorShape']['dim']
+            return (int(dim[0]['size']), int(dim[1]['size']))
+
+        def get_output_data(r):
+            return r.get(
+                'outputs', {}
+            ).get('outputs', {}).get('floatVal')
+
         channel = implementations.insecure_channel(
             self.server_host, self.server_port
         )
@@ -62,12 +73,15 @@ class ModelRPC(object):
         )
 
         result = stub.Predict(request, 10.0)  # 10 secs timeout
-        # print("Type:", type(result))
-        # print(result)
-        result = MessageToJson(result)
-        result = result.get('outputs' {}).get('outputs', {}).get('floatVal')
+        print("Type:", type(result))
+        print(result)
+        result = json.loads(MessageToJson(result))
 
-        return result
+        data = get_output_data(result)
+        shape = get_output_shape(result)
+
+        return dict(data=data, shape=shape)
+
 
 server = zerorpc.Server(ModelRPC())
 server.bind("tcp://0.0.0.0:{}".format(args.port))
